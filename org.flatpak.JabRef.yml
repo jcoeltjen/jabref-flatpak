@@ -1,0 +1,76 @@
+$schema: https://raw.githubusercontent.com/TingPing/flatpak-manifest-schema/master/flatpak-manifest.schema#
+app-id: org.flatpak.JabRef
+runtime: org.freedesktop.Platform
+runtime-version: "18.08"
+sdk: org.freedesktop.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.openjdk8
+command: /app/jabref/JabRef-4.3.1/bin/JabRef
+finish-args:
+  - --socket=x11
+  - --share=network
+  - --env=JAVA_HOME=/app/jdk
+  - --filesystem=home
+modules:
+  - name: openjdk
+    buildsystem: simple
+    build-commands:
+      - /usr/lib/sdk/openjdk8/installjdk.sh
+      - install cacerts /app/jdk/jre/lib/security/cacerts
+    sources:
+      - type: file
+        path: /etc/pki/java/cacerts # place cacerts file from host system inside. Find a better solution for that
+  - name: openjfx
+    buildsystem: simple
+    build-commands:
+      - ./gradlew -PCOMPILE_TARGETS=linux zips -x verifyJava -x appsJarLinux
+      - unzip build/bundles/javafx-sdk-overlay.zip -d /app/jdk
+      - unzip build/bundles/javafx-sdk-overlay.zip -d /app/jre
+    build-options:
+      build-args:
+        - --share=network
+      append-path: /app/jdk/bin
+      env:
+        JAVA_HOME: /app/jdk
+    sources:
+      # - type: dir # replace with hg clone command after debugging
+      #   path: rt
+      - type: shell
+        commands:
+          - hg clone http://hg.openjdk.java.net/openjfx/8u/rt/
+          - cd rt
+      - type: shell
+        commands:
+          - chmod a+x gradlew
+      - type: shell # remove -Werror from CFLAGS list to not fail the build on any error
+        commands:
+          - sed 's|,\s*"-Werror"||' -i buildSrc/linux.gradle
+    modules:
+      - name: gtk2
+        buildsystem: autotools
+        sources:
+          - type: archive
+            url: http://ftp.gnome.org/pub/gnome/sources/gtk+/2.24/gtk+-2.24.32.tar.xz
+            sha256: b6c8a93ddda5eabe3bfee1eb39636c9a03d2a56c7b62828b359bf197943c582e
+
+  - name: jabRef
+    buildsystem: simple
+    build-options:
+      build-args:
+        - --share=network
+      append-path: /app/jdk/bin
+      env:
+        JAVA_HOME: /app/jdk
+        GRADLE_OPTS: -Dfile.encoding=UTF-8
+    build-commands:
+      - ./gradlew build -x test -Poptions.errorprone.enabled=false
+      - unzip build/distributions/JabRef-shadow-4.3.1.zip -d /app/jabref-shadow
+      - unzip build/distributions/JabRef-4.3.1.zip -d /app/jabref
+    sources:
+      - type: git
+        url: https://github.com/JabRef/jabref.git
+        branch: v4.3.1
+      - type: shell # disable errorprone plugin as the stable version of jabref does not pass the errorprone compiler
+        commands:
+          - sed 's|^\s*id\s*["\x27]net\.ltgt\.errorprone.*$||' -i build.gradle # hex \x27 -> '
+          - cat build.gradle
