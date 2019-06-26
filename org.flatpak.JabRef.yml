@@ -5,72 +5,75 @@ runtime-version: "18.08"
 sdk: org.freedesktop.Sdk
 sdk-extensions:
   - org.freedesktop.Sdk.Extension.openjdk8
-command: /app/jabref/JabRef-4.3.1/bin/JabRef
+command: /app/jabref/start.sh
 finish-args:
-  - --socket=x11
-  - --share=network
-  - --env=JAVA_HOME=/app/jdk
-  - --filesystem=home
+- --socket=x11
+- --share=network
+- --env=JAVA_HOME=/app/jdk
+- --filesystem=home
 modules:
-  - name: openjdk
-    buildsystem: simple
-    build-commands:
-      - /usr/lib/sdk/openjdk8/installjdk.sh
-      - install cacerts /app/jdk/jre/lib/security/cacerts
+- name: openjdk
+  buildsystem: simple
+  build-commands:
+  - /usr/lib/sdk/openjdk8/installjdk.sh
+  - install cacerts /app/jdk/jre/lib/security/cacerts
+  sources:
+  - type: file
+    path: /etc/pki/java/cacerts # place cacerts file from host system inside. Find a better solution for that
+- name: openjfx
+  buildsystem: simple
+  sources:
+  - type: file
+    url: http://security.debian.org/debian-security/pool/updates/main/o/openjfx/openjfx_8u141-b14-3~deb9u1_amd64.deb
+    dest-filename: openjfx-8.deb
+    sha256: 8a7308879047392b2581f3c25f71e92129e17f2e665be11168779562ada3a40d      
+  - type: file
+    url: http://security.debian.org/debian-security/pool/updates/main/o/openjfx/libopenjfx-java_8u141-b14-3~deb9u1_all.deb
+    dest-filename: libopenjfx-8.deb
+    sha256: 716c6ba4c63597d2621025320c894aba6a9cf7059893a1d8a4f6ae45c0c38c46
+  build-commands:
+  - ar vx libopenjfx-8.deb
+  - tar xvf data.tar.xz
+  - cp -dr usr/share/java/openjfx/* /app/jdk/ 
+  modules:
+  - name: gtk2
+    buildsystem: autotools
     sources:
-      - type: file
-        path: /etc/pki/java/cacerts # place cacerts file from host system inside. Find a better solution for that
-  - name: openjfx
-    buildsystem: simple
-    build-commands:
-      - ./gradlew -PCOMPILE_TARGETS=linux zips -x verifyJava -x appsJarLinux
-      - unzip build/bundles/javafx-sdk-overlay.zip -d /app/jdk
-      - unzip build/bundles/javafx-sdk-overlay.zip -d /app/jre
-    build-options:
-      build-args:
-        - --share=network
-      append-path: /app/jdk/bin
-      env:
-        JAVA_HOME: /app/jdk
-    sources:
-      # - type: dir # replace with hg clone command after debugging
-      #   path: rt
-      - type: shell
-        commands:
-          - hg clone http://hg.openjdk.java.net/openjfx/8u/rt/
-          - cd rt
-      - type: shell
-        commands:
-          - chmod a+x gradlew
-      - type: shell # remove -Werror from CFLAGS list to not fail the build on any error
-        commands:
-          - sed 's|,\s*"-Werror"||' -i buildSrc/linux.gradle
-    modules:
-      - name: gtk2
-        buildsystem: autotools
-        sources:
-          - type: archive
-            url: http://ftp.gnome.org/pub/gnome/sources/gtk+/2.24/gtk+-2.24.32.tar.xz
-            sha256: b6c8a93ddda5eabe3bfee1eb39636c9a03d2a56c7b62828b359bf197943c582e
-
-  - name: jabRef
-    buildsystem: simple
-    build-options:
-      build-args:
-        - --share=network
-      append-path: /app/jdk/bin
-      env:
-        JAVA_HOME: /app/jdk
-        GRADLE_OPTS: -Dfile.encoding=UTF-8
-    build-commands:
-      - ./gradlew build -x test -Poptions.errorprone.enabled=false
-      - unzip build/distributions/JabRef-shadow-4.3.1.zip -d /app/jabref-shadow
-      - unzip build/distributions/JabRef-4.3.1.zip -d /app/jabref
-    sources:
-      - type: git
-        url: https://github.com/JabRef/jabref.git
-        branch: v4.3.1
-      - type: shell # disable errorprone plugin as the stable version of jabref does not pass the errorprone compiler
-        commands:
-          - sed 's|^\s*id\s*["\x27]net\.ltgt\.errorprone.*$||' -i build.gradle # hex \x27 -> '
-          - cat build.gradle
+    - type: archive
+      url: http://ftp.gnome.org/pub/gnome/sources/gtk+/2.24/gtk+-2.24.32.tar.xz
+      sha256: b6c8a93ddda5eabe3bfee1eb39636c9a03d2a56c7b62828b359bf197943c582e 
+- name: jabref
+  buildsystem: simple
+  build-commands:
+  - install -D JabRef-4.3.1.jar /app/jabref/JabRef-4.3.1.jar
+  - install -D start.sh /app/jabref/start.sh
+  sources:
+  - type: file
+    url: https://github.com/JabRef/jabref/releases/download/v4.3.1/JabRef-4.3.1.jar
+    dest-filename: JabRef-4.3.1.jar
+    sha256: 5b52ee079c430a59d99006a644bba3d191c21d1ec9e6bae5c87493ad74ccc395
+  - type: script
+    dest-filename: start.sh
+    commands:
+    - /app/jdk/bin/java -jar /app/jabref/JabRef-4.3.1.jar -Dprism.verbose=true
+#  name: jabRef
+#  buildsystem: simple
+#  build-options:
+#    build-args:
+#    - --share=network
+#    append-path: /app/jdk/bin
+#    env:
+#      JAVA_HOME: /app/jdk
+#      GRADLE_OPTS: -Dfile.encoding=UTF-8
+#  build-commands:
+#  - ./gradlew build -x test -Poptions.errorprone.enabled=false
+#  - unzip build/distributions/JabRef-shadow-4.3.1.zip -d /app/jabref-shadow
+#  - unzip build/distributions/JabRef-4.3.1.zip -d /app/jabref
+#  sources:
+#  - type: git
+#    url: https://github.com/JabRef/jabref.git
+#    branch: v4.3.1
+#  - type: shell # disable errorprone plugin as the stable version of jabref does not pass the errorprone compiler
+#    commands:
+#    - sed 's|^\s*id\s*["\x27]net\.ltgt\.errorprone.*$||' -i build.gradle # hex \x27 -> '
+#    - cat build.gradle
